@@ -12,6 +12,7 @@ from ai_plan_issue import events
 from ai_plan_issue import exporter
 from ai_plan_issue import ledger
 from ai_plan_issue import planning
+from ai_plan_issue import runtime
 from ai_plan_issue import store
 
 
@@ -298,6 +299,28 @@ def test_planning_runtime_is_separate_from_ledger() -> None:
         assert f"def {name}" not in ledger_source
         assert f"def {name}" in planning_source
         assert getattr(ledger, name) is getattr(planning, name)
+
+
+def test_realtime_runtime_is_separate_from_ledger() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ledger_source = (root / "src" / "ai_plan_issue" / "ledger.py").read_text(encoding="utf-8")
+    runtime_source = (root / "src" / "ai_plan_issue" / "runtime.py").read_text(encoding="utf-8")
+
+    assert "class ConflictError" not in ledger_source
+    assert ledger.ConflictError is runtime.ConflictError
+    for name in (
+        "upsert_issue_db",
+        "import_ledger_to_db",
+        "export_db_to_ledger",
+        "ensure_realtime_store",
+        "realtime_load_index",
+        "realtime_find_issue",
+        "check_expected_revision",
+        "realtime_load_issue_detail",
+    ):
+        assert f"def {name}" not in ledger_source
+        assert f"def {name}" in runtime_source
+        assert getattr(ledger, name) is getattr(runtime, name)
 
 
 def test_codex_plugin_runs_when_copied_without_repository_root(tmp_path: Path) -> None:

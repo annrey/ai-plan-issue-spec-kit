@@ -7,7 +7,6 @@ adopt AI Plan Issue without installing a framework or service dependency.
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import sqlite3
@@ -17,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from . import events, exporter, planning, store
+from . import events, exporter, planning, runtime, store
 
 
 SCHEMA_VERSION = store.SCHEMA_VERSION
@@ -36,10 +35,6 @@ VALID_STATUSES = {
     "done",
 }
 VALID_PRIORITIES = {"P0", "P1", "P2", "P3", "none"}
-
-class ConflictError(RuntimeError):
-    """Raised when a realtime write targets a stale issue revision."""
-
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -100,6 +95,15 @@ latest_feature_dir = planning.latest_feature_dir
 task_group_key = planning.task_group_key
 next_parent_number = planning.next_parent_number
 next_child_number = planning.next_child_number
+ConflictError = runtime.ConflictError
+upsert_issue_db = runtime.upsert_issue_db
+import_ledger_to_db = runtime.import_ledger_to_db
+export_db_to_ledger = runtime.export_db_to_ledger
+ensure_realtime_store = runtime.ensure_realtime_store
+realtime_load_index = runtime.realtime_load_index
+realtime_find_issue = runtime.realtime_find_issue
+check_expected_revision = runtime.check_expected_revision
+realtime_load_issue_detail = runtime.realtime_load_issue_detail
 
 
 @contextmanager
@@ -456,177 +460,6 @@ def load_issue_detail(project_root: Path, issue_id: str) -> dict:
         "implementation_md": (directory / "implementation.md").read_text(encoding="utf-8") if (directory / "implementation.md").exists() else "",
         "comments": read_jsonl(directory / "comments.jsonl"),
         "activity": read_jsonl(directory / "activity.jsonl"),
-    }
-
-
-def upsert_issue_db(conn: sqlite3.Connection, issue: dict) -> None:
-    revision = int(issue.get("revision", 1))
-    issue["revision"] = revision
-    conn.execute(
-        """
-        INSERT INTO issues (id, data, revision, updated_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET data=excluded.data, revision=excluded.revision, updated_at=excluded.updated_at
-        """,
-        (issue["id"], json_dumps(issue), revision, now_iso()),
-    )
-
-
-def import_ledger_to_db(project_root: Path, force: bool = False) -> dict:
-    init_realtime_db(project_root)
-    with connect_db(project_root) as conn:
-        if force:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute("DELETE FROM issues")
-            conn.execute("DELETE FROM comments")
-            conn.execute("DELETE FROM activity")
-            conn.execute("DELETE FROM events")
-            conn.execute("DELETE FROM presence")
-        else:
-            conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute("SELECT COUNT(*) AS count FROM issues").fetchone()
-            if row and int(row["count"]) > 0:
-                conn.execute("COMMIT")
-                return realtime_index(project_root)
-
-        index = load_index(project_root)
-        for issue in index.get("issues", []):
-            issue.setdefault("revision", 1)
-            upsert_issue_db(conn, issue)
-            directory = issue_dir(project_root, issue)
-            for comment in read_jsonl(directory / "comments.jsonl"):
-                comment.setdefault("id", f"com-{uuid4().hex[:12]}")
-                comment.setdefault("ts", now_iso())
-                comment.setdefault("author", "unknown")
-                comment.setdefault("body", "")
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO comments (id, issue_id, ts, author, body, data)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        comment["id"],
-                        issue["id"],
-                        comment["ts"],
-                        comment["author"],
-                        comment["body"],
-                        json_dumps(comment),
-                    ),
-                )
-            for activity_entry in read_jsonl(directory / "activity.jsonl"):
-                activity_entry.setdefault("id", f"act-{uuid4().hex[:12]}")
-                activity_entry.setdefault("ts", now_iso())
-                activity_entry.setdefault("author", "unknown")
-                activity_entry.setdefault("action", "recorded")
-                activity_entry.setdefault("body", "")
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO activity (id, issue_id, ts, author, action, body, data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        activity_entry["id"],
-                        issue["id"],
-                        activity_entry["ts"],
-                        activity_entry["author"],
-                        activity_entry["action"],
-                        activity_entry["body"],
-                        json_dumps(activity_entry),
-                    ),
-                )
-        events.emit_event(conn, "board.exported", "system", None, None, {"mode": "import", "issues": len(index["issues"])})
-        conn.execute("COMMIT")
-    export_db_to_ledger(project_root)
-    return realtime_index(project_root)
-
-
-def export_db_to_ledger(project_root: Path) -> dict:
-    init_realtime_db(project_root)
-    index = realtime_index(project_root)
-    issues_root(project_root).mkdir(parents=True, exist_ok=True)
-    save_index(project_root, index)
-    refresh_board(project_root, index)
-    with connect_db(project_root) as conn:
-        for issue in index.get("issues", []):
-            ensure_issue_files(project_root, issue, issue.get("summary") or issue["title"])
-            sync_issue_markdown_metadata(project_root, issue)
-            directory = issue_dir(project_root, issue)
-            comment_rows = conn.execute(
-                "SELECT data FROM comments WHERE issue_id = ? ORDER BY ts, id",
-                (issue["id"],),
-            ).fetchall()
-            activity_rows = conn.execute(
-                "SELECT data FROM activity WHERE issue_id = ? ORDER BY ts, id",
-                (issue["id"],),
-            ).fetchall()
-            (directory / "comments.jsonl").write_text(
-                "".join(row["data"] + "\n" for row in comment_rows),
-                encoding="utf-8",
-            )
-            (directory / "activity.jsonl").write_text(
-                "".join(row["data"] + "\n" for row in activity_rows),
-                encoding="utf-8",
-            )
-    return index
-
-
-def ensure_realtime_store(project_root: Path) -> dict:
-    init_realtime_db(project_root)
-    get_project_token(project_root)
-    if realtime_issue_count(project_root) == 0 and index_path(project_root).exists() and load_index(project_root).get("issues"):
-        return import_ledger_to_db(project_root, force=False)
-    if not index_path(project_root).exists():
-        export_db_to_ledger(project_root)
-    return realtime_index(project_root)
-
-
-def realtime_load_index(project_root: Path) -> dict:
-    ensure_realtime_store(project_root)
-    return realtime_index(project_root)
-
-
-def realtime_find_issue(project_root: Path, issue_id: str, conn: sqlite3.Connection | None = None) -> dict:
-    close_conn = conn is None
-    conn = conn or connect_db(project_root)
-    try:
-        row = conn.execute("SELECT data, revision FROM issues WHERE id = ?", (issue_id,)).fetchone()
-        if not row:
-            raise KeyError(f"Issue not found: {issue_id}")
-        return issue_from_row(row)
-    finally:
-        if close_conn:
-            conn.close()
-
-
-def check_expected_revision(issue: dict, expected_revision: int | None) -> None:
-    if expected_revision is None:
-        return
-    current = int(issue.get("revision", 1))
-    if int(expected_revision) != current:
-        raise ConflictError(f"Stale issue revision for {issue['id']}: expected {expected_revision}, current {current}")
-
-
-def realtime_load_issue_detail(project_root: Path, issue_id: str) -> dict:
-    ensure_realtime_store(project_root)
-    issue = realtime_find_issue(project_root, issue_id)
-    directory = issue_dir(project_root, issue)
-    with connect_db(project_root) as conn:
-        comments = [
-            json.loads(row["data"])
-            for row in conn.execute("SELECT data FROM comments WHERE issue_id = ? ORDER BY ts, id", (issue_id,))
-        ]
-        activity_entries = [
-            json.loads(row["data"])
-            for row in conn.execute("SELECT data FROM activity WHERE issue_id = ? ORDER BY ts, id", (issue_id,))
-        ]
-    return {
-        "issue": issue,
-        "issue_md": (directory / "issue.md").read_text(encoding="utf-8") if (directory / "issue.md").exists() else "",
-        "implementation_md": (directory / "implementation.md").read_text(encoding="utf-8")
-        if (directory / "implementation.md").exists()
-        else "",
-        "comments": comments,
-        "activity": activity_entries,
     }
 
 
