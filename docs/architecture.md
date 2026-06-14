@@ -1,6 +1,6 @@
 # Architecture
 
-AI Plan Issue has nine layers:
+AI Plan Issue has ten layers:
 
 1. `src/ai_plan_issue/planning.py`
    - Parses checklist tasks.
@@ -23,33 +23,44 @@ AI Plan Issue has nine layers:
    - Exports realtime state back to Markdown and JSONL.
    - Owns realtime read helpers, issue detail loading, and revision conflict checks.
 
-5. `src/ai_plan_issue/ledger.py`
+5. `src/ai_plan_issue/mutations.py`
+   - Owns realtime issue write transactions.
+   - Creates, updates, comments, splits, claims, assigns, and records implementation notes.
+   - Emits activity and SSE events for write operations.
+
+6. `src/ai_plan_issue/ledger.py`
    - Coordinates issue generation from parsed tasks.
    - Creates parent and child issues.
-   - Owns issue/comment mutations, claims, and assignment.
+   - Keeps legacy file-ledger mutation helpers and compatibility aliases.
 
-6. `src/ai_plan_issue/events.py`
+7. `src/ai_plan_issue/events.py`
    - Writes SSE event records.
    - Writes activity records.
    - Owns presence state and event replay helpers.
 
-7. `src/ai_plan_issue/cli.py`
+8. `src/ai_plan_issue/cli.py`
    - Builds the command-line parser.
    - Maps CLI commands to ledger operations.
    - Owns machine-readable JSON error output and CLI exit codes.
 
-8. `src/ai_plan_issue/board_server.py`
+9. `src/ai_plan_issue/board_server.py`
    - Serves the board UI.
    - Exposes `/api/v1/*`.
    - Pushes updates with Server-Sent Events.
    - Enforces project token auth.
 
-9. `src/ai_plan_issue/web/`
+10. `src/ai_plan_issue/web/`
    - Browser board UI.
    - Reads REST APIs and subscribes to `/api/v1/events`.
    - Shows workflow columns, issue hierarchy, details, comments, activity, claim, and assignment state.
 
 Default state root is `.ai-plan-issue/`. Set `AI_PLAN_ISSUE_DIR` to override it.
+
+Core modules (`planning`, `store`, `exporter`, `events`, `runtime`, and
+`mutations`) must not import the `ledger` facade. The allowed direction is from
+facades and entrypoints into core modules, not the reverse. This keeps future
+agent-tool integrations able to depend on small runtime surfaces without pulling
+in the full CLI/server compatibility layer.
 
 For large projects, the plan, milestone, module, parent issue, child issue,
 dependency, comment, and activity records are also a context coordination layer.

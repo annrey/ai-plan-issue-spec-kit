@@ -19,10 +19,14 @@ The planning pass moves checklist parsing, slug generation, priority/category/mo
 The runtime pass moves realtime SQLite bootstrap, file-ledger import/export,
 issue detail reads, and revision conflict checks into `src/ai_plan_issue/runtime.py`.
 
+The mutation pass moves realtime write transactions into
+`src/ai_plan_issue/mutations.py`.
+
 The ledger module remains responsible for:
 
 - issue generation orchestration
-- realtime mutation orchestration
+- legacy file-ledger mutation helpers
+- compatibility aliases for stable public imports
 
 The CLI module becomes responsible for:
 
@@ -70,6 +74,16 @@ The runtime module becomes responsible for:
 - checking expected revisions for optimistic concurrency
 - exposing `ConflictError` for CLI and server error mapping
 
+The mutations module becomes responsible for:
+
+- updating issue fields
+- appending comments
+- creating parent and child issues
+- splitting parent issues
+- claiming and assigning issues
+- writing implementation notes
+- preparing agent run context
+
 ## Large Project Context Goal
 
 For large projects, AI Plan Issue should act as a context coordination system,
@@ -86,6 +100,7 @@ why a step exists.
 
 - Existing CLI behavior remains compatible.
 - `ai_plan_issue.cli.main` is the entrypoint used by tests and console scripts.
-- `ledger.py` no longer contains `cmd_*`, `build_parser`, `main`, `emit_event`, `append_activity_db`, `realtime_update_presence`, `realtime_list_presence`, `realtime_events_since`, `realtime_export`, `connect_db`, `init_realtime_db`, `realtime_issue_count`, `issue_from_row`, `issue_rows`, `realtime_index`, `load_index`, `save_index`, `issue_dir`, `append_jsonl`, `append_activity`, `read_jsonl`, `ensure_issue_files`, `refresh_board`, `slugify`, `parse_tasks`, `latest_feature_dir`, `priority_for_group`, `module_for_group`, `category_for_group`, `task_group_key`, `next_parent_number`, `next_child_number`, `upsert_issue_db`, `import_ledger_to_db`, `export_db_to_ledger`, `ensure_realtime_store`, `realtime_load_index`, `realtime_find_issue`, `check_expected_revision`, or `realtime_load_issue_detail`.
+- `ledger.py` no longer contains `cmd_*`, `build_parser`, `main`, `emit_event`, `append_activity_db`, `realtime_update_presence`, `realtime_list_presence`, `realtime_events_since`, `realtime_export`, `connect_db`, `init_realtime_db`, `realtime_issue_count`, `issue_from_row`, `issue_rows`, `realtime_index`, `load_index`, `save_index`, `issue_dir`, `append_jsonl`, `append_activity`, `read_jsonl`, `ensure_issue_files`, `refresh_board`, `slugify`, `parse_tasks`, `latest_feature_dir`, `priority_for_group`, `module_for_group`, `category_for_group`, `task_group_key`, `next_parent_number`, `next_child_number`, `upsert_issue_db`, `import_ledger_to_db`, `export_db_to_ledger`, `ensure_realtime_store`, `realtime_load_index`, `realtime_find_issue`, `check_expected_revision`, `realtime_load_issue_detail`, `realtime_update_issue_fields`, `realtime_append_comment`, `realtime_create_manual_issue`, `realtime_split_issue`, `realtime_claim_issue`, `realtime_assign_issue`, `realtime_update_implementation_notes`, or `realtime_prepare_run`.
+- Core modules do not import the `ledger.py` facade.
 - Source and vendored Codex plugin runtime stay byte-for-byte aligned except ignored caches.
 - Full test suite and syntax checks pass.

@@ -103,9 +103,9 @@ def realtime_update_presence(
     kind: str = "human",
     issue_id: str | None = None,
 ) -> dict:
-    from . import ledger
+    from . import runtime
 
-    ledger.ensure_realtime_store(project_root)
+    runtime.ensure_realtime_store(project_root)
     payload = {
         "actor": actor,
         "display_name": display_name or actor,
@@ -133,9 +133,9 @@ def realtime_update_presence(
 
 
 def realtime_list_presence(project_root: Path, max_age_seconds: int = 180) -> list[dict]:
-    from . import ledger
+    from . import runtime
 
-    ledger.ensure_realtime_store(project_root)
+    runtime.ensure_realtime_store(project_root)
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
     actors: list[dict] = []
     with store.connect_db(project_root) as conn:
@@ -156,9 +156,9 @@ def realtime_list_presence(project_root: Path, max_age_seconds: int = 180) -> li
 
 
 def realtime_events_since(project_root: Path, last_event_id: str | None = None, limit: int = 100) -> list[dict]:
-    from . import ledger
+    from . import runtime
 
-    ledger.ensure_realtime_store(project_root)
+    runtime.ensure_realtime_store(project_root)
     with store.connect_db(project_root) as conn:
         since_seq = 0
         if last_event_id:
@@ -190,9 +190,9 @@ def realtime_events_since(project_root: Path, last_event_id: str | None = None, 
 
 
 def realtime_export(project_root: Path, author: str = "system") -> dict:
-    from . import ledger
+    from . import runtime
 
-    index = ledger.export_db_to_ledger(project_root)
+    index = runtime.export_db_to_ledger(project_root)
     with store.connect_db(project_root) as conn:
         conn.execute("BEGIN IMMEDIATE")
         emit_event(conn, "board.exported", author, None, None, {"mode": "export", "issues": len(index["issues"])})

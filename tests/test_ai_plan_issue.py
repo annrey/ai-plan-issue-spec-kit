@@ -11,6 +11,7 @@ from ai_plan_issue import cli
 from ai_plan_issue import events
 from ai_plan_issue import exporter
 from ai_plan_issue import ledger
+from ai_plan_issue import mutations
 from ai_plan_issue import planning
 from ai_plan_issue import runtime
 from ai_plan_issue import store
@@ -321,6 +322,37 @@ def test_realtime_runtime_is_separate_from_ledger() -> None:
         assert f"def {name}" not in ledger_source
         assert f"def {name}" in runtime_source
         assert getattr(ledger, name) is getattr(runtime, name)
+
+
+def test_core_modules_do_not_depend_on_ledger_facade() -> None:
+    root = Path(__file__).resolve().parents[1] / "src" / "ai_plan_issue"
+
+    for module_name in ("planning", "store", "exporter", "events", "runtime", "mutations"):
+        source = (root / f"{module_name}.py").read_text(encoding="utf-8")
+        assert "from . import ledger" not in source
+        assert "import ledger" not in source
+
+
+def test_realtime_mutations_are_separate_from_ledger() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ledger_source = (root / "src" / "ai_plan_issue" / "ledger.py").read_text(encoding="utf-8")
+    mutations_source = (root / "src" / "ai_plan_issue" / "mutations.py").read_text(encoding="utf-8")
+
+    for name in (
+        "realtime_update_issue_fields",
+        "realtime_append_comment",
+        "realtime_create_manual_issue",
+        "realtime_split_issue",
+        "realtime_claim_issue",
+        "realtime_assign_issue",
+        "build_implementation_notes",
+        "write_implementation_notes",
+        "realtime_update_implementation_notes",
+        "realtime_prepare_run",
+    ):
+        assert f"def {name}" not in ledger_source
+        assert f"def {name}" in mutations_source
+        assert getattr(ledger, name) is getattr(mutations, name)
 
 
 def test_codex_plugin_runs_when_copied_without_repository_root(tmp_path: Path) -> None:
