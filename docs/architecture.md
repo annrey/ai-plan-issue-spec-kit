@@ -1,6 +1,6 @@
 # Architecture
 
-AI Plan Issue has ten layers:
+AI Plan Issue has eleven layers:
 
 1. `src/ai_plan_issue/planning.py`
    - Parses checklist tasks.
@@ -28,39 +28,44 @@ AI Plan Issue has ten layers:
    - Creates, updates, comments, splits, claims, assigns, and records implementation notes.
    - Emits activity and SSE events for write operations.
 
-6. `src/ai_plan_issue/ledger.py`
+6. `src/ai_plan_issue/file_mutations.py`
+   - Owns legacy Markdown/JSONL issue write helpers.
+   - Keeps file-ledger update, comment, create, split, claim, assign, and detail operations.
+   - Uses project-local file locks for compatibility mode.
+
+7. `src/ai_plan_issue/ledger.py`
    - Coordinates issue generation from parsed tasks.
    - Creates parent and child issues.
-   - Keeps legacy file-ledger mutation helpers and compatibility aliases.
+   - Keeps compatibility aliases for stable public imports.
 
-7. `src/ai_plan_issue/events.py`
+8. `src/ai_plan_issue/events.py`
    - Writes SSE event records.
    - Writes activity records.
    - Owns presence state and event replay helpers.
 
-8. `src/ai_plan_issue/cli.py`
+9. `src/ai_plan_issue/cli.py`
    - Builds the command-line parser.
    - Maps CLI commands to ledger operations.
    - Owns machine-readable JSON error output and CLI exit codes.
 
-9. `src/ai_plan_issue/board_server.py`
+10. `src/ai_plan_issue/board_server.py`
    - Serves the board UI.
    - Exposes `/api/v1/*`.
    - Pushes updates with Server-Sent Events.
    - Enforces project token auth.
 
-10. `src/ai_plan_issue/web/`
+11. `src/ai_plan_issue/web/`
    - Browser board UI.
    - Reads REST APIs and subscribes to `/api/v1/events`.
    - Shows workflow columns, issue hierarchy, details, comments, activity, claim, and assignment state.
 
 Default state root is `.ai-plan-issue/`. Set `AI_PLAN_ISSUE_DIR` to override it.
 
-Core modules (`planning`, `store`, `exporter`, `events`, `runtime`, and
-`mutations`) must not import the `ledger` facade. The allowed direction is from
-facades and entrypoints into core modules, not the reverse. This keeps future
-agent-tool integrations able to depend on small runtime surfaces without pulling
-in the full CLI/server compatibility layer.
+Core modules (`planning`, `store`, `exporter`, `events`, `runtime`, `mutations`,
+and `file_mutations`) must not import the `ledger` facade. The allowed direction
+is from facades and entrypoints into core modules, not the reverse. This keeps
+future agent-tool integrations able to depend on small runtime surfaces without
+pulling in the full CLI/server compatibility layer.
 
 For large projects, the plan, milestone, module, parent issue, child issue,
 dependency, comment, and activity records are also a context coordination layer.

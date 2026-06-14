@@ -11,11 +11,10 @@ import os
 import shutil
 import time
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4
 
-from . import exporter, mutations, planning, runtime, store
+from . import exporter, file_mutations, mutations, planning, runtime, store
 
 
 SCHEMA_VERSION = store.SCHEMA_VERSION
@@ -113,6 +112,13 @@ build_implementation_notes = mutations.build_implementation_notes
 write_implementation_notes = mutations.write_implementation_notes
 realtime_update_implementation_notes = mutations.realtime_update_implementation_notes
 realtime_prepare_run = mutations.realtime_prepare_run
+update_issue_fields = file_mutations.update_issue_fields
+append_comment = file_mutations.append_comment
+create_manual_issue = file_mutations.create_manual_issue
+split_issue = file_mutations.split_issue
+claim_issue = file_mutations.claim_issue
+assign_issue = file_mutations.assign_issue
+load_issue_detail = file_mutations.load_issue_detail
 
 
 @contextmanager
@@ -287,189 +293,6 @@ def generate_issues(
 
         refresh_board(project_root, index)
         return index
-
-
-def update_issue_fields(project_root: Path, issue_id: str, fields: dict, author: str = "system") -> dict:
-    if not fields:
-        raise ValueError("No editable issue fields provided.")
-    with issue_write_lock(project_root):
-        index = load_index(project_root)
-        issue = find_issue(index, issue_id)
-        before = {key: issue.get(key) for key in fields}
-        for key, value in fields.items():
-            if key == "status" and value not in VALID_STATUSES:
-                raise ValueError(f"Invalid status: {value}")
-            if key == "priority" and value not in VALID_PRIORITIES:
-                raise ValueError(f"Invalid priority: {value}")
-            issue[key] = value
-        issue["revision"] = int(issue.get("revision", 1)) + 1
-        save_index(project_root, index)
-        sync_issue_markdown_metadata(project_root, issue)
-        append_activity(
-            project_root,
-            issue,
-            "updated",
-            f"Updated fields {sorted(fields)} from {before} to {fields}.",
-            author=author,
-        )
-        refresh_board(project_root, index)
-        return issue
-
-
-def append_comment(project_root: Path, issue_id: str, body: str, author: str) -> dict:
-    with issue_write_lock(project_root):
-        index = load_index(project_root)
-        issue = find_issue(index, issue_id)
-        payload = {
-            "id": f"com-{uuid4().hex[:12]}",
-            "ts": now_iso(),
-            "author": author,
-            "body": body,
-        }
-        append_jsonl(issue_dir(project_root, issue) / "comments.jsonl", payload)
-        append_activity(project_root, issue, "commented", f"Comment added by {author}.", author=author)
-        refresh_board(project_root, index)
-        return payload
-
-
-def create_manual_issue(
-    project_root: Path,
-    title: str,
-    summary: str = "",
-    status: str = "backlog",
-    priority: str = "P2",
-    parent_id: str | None = None,
-    assignee: str | None = None,
-    module: str | None = None,
-    category: str | None = None,
-) -> dict:
-    with issue_write_lock(project_root):
-        if status not in VALID_STATUSES:
-            raise ValueError(f"Invalid status: {status}")
-        if priority not in VALID_PRIORITIES:
-            raise ValueError(f"Invalid priority: {priority}")
-        index = load_index(project_root)
-        prefix = DEFAULT_PREFIX
-        issues = index.get("issues", [])
-        if parent_id:
-            parent = find_issue(index, parent_id)
-            child_number = next_child_number(issues, parent_id)
-            issue_id = f"{parent_id}-{child_number:02d}"
-            issue_type = "step"
-            module = module or parent.get("module")
-            category = category or parent.get("category") or "implementation"
-        else:
-            issue_id = f"{prefix}-{next_parent_number(issues, prefix):03d}"
-            issue_type = "parent"
-            module = module or slugify(title, "module")
-            category = category or "implementation"
-        issue = {
-            "id": issue_id,
-            "slug": slugify(title),
-            "path": f"{id_path_fragment(issue_id, prefix)}-{slugify(title)}",
-            "title": title,
-            "summary": summary,
-            "issue_type": issue_type,
-            "module": module,
-            "category": category,
-            "milestone": "manual",
-            "order": len(issues) + 1,
-            "status": status,
-            "priority": priority,
-            "parent_id": parent_id,
-            "children": [],
-            "depends_on": [],
-            "source": {"manual": True},
-            "assignee": assignee,
-            "claimed_by": None,
-            "claim_expires_at": None,
-            "revision": 1,
-            "external_refs": [],
-            "labels": [module] if module else [],
-        }
-        issues.append(issue)
-        if parent_id:
-            parent = find_issue(index, parent_id)
-            parent.setdefault("children", []).append(issue_id)
-            parent["revision"] = int(parent.get("revision", 1)) + 1
-        save_index(project_root, index)
-        ensure_issue_files(project_root, issue, summary or title)
-        append_activity(project_root, issue, "created", "Issue created manually.")
-        if parent_id:
-            append_activity(project_root, parent, "split", f"Added child issue {issue_id}.")
-        refresh_board(project_root, index)
-        return issue
-
-
-def split_issue(project_root: Path, parent_id: str, child_titles: list[str], author: str = "system") -> list[dict]:
-    if not child_titles:
-        raise ValueError("At least one child title is required.")
-    created = [
-        create_manual_issue(
-            project_root,
-            title=title,
-            summary=f"Child issue split from {parent_id}.",
-            status="todo",
-            priority=find_issue(load_index(project_root), parent_id).get("priority", "P2"),
-            parent_id=parent_id,
-        )
-        for title in child_titles
-    ]
-    index = load_index(project_root)
-    parent = find_issue(index, parent_id)
-    append_activity(
-        project_root,
-        parent,
-        "split",
-        f"Split into children: {', '.join(issue['id'] for issue in created)}.",
-        author=author,
-    )
-    refresh_board(project_root, index)
-    return created
-
-
-def claim_issue(project_root: Path, issue_id: str, agent: str, ttl_minutes: int, force: bool = False) -> dict:
-    agent = agent.strip()
-    if not agent:
-        raise ValueError("Claim agent is required.")
-    if ttl_minutes <= 0:
-        raise ValueError("Claim ttl_minutes must be positive.")
-    with issue_write_lock(project_root):
-        index = load_index(project_root)
-        issue = find_issue(index, issue_id)
-        current_claim = issue.get("claimed_by")
-        expires_at = parse_iso(issue.get("claim_expires_at"))
-        active = expires_at is not None and expires_at > datetime.now(timezone.utc)
-        if current_claim and current_claim != agent and active and not force:
-            raise ConflictError(f"Issue {issue_id} is already claimed by {current_claim} until {issue['claim_expires_at']}")
-        issue["claimed_by"] = agent
-        issue["claim_expires_at"] = (
-            datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=ttl_minutes)
-        ).isoformat()
-        issue["status"] = "in_progress"
-        issue["revision"] = int(issue.get("revision", 1)) + 1
-        save_index(project_root, index)
-        sync_issue_markdown_metadata(project_root, issue)
-        append_activity(project_root, issue, "claimed", f"Issue claimed by {agent}.", author=agent)
-        refresh_board(project_root, index)
-        return issue
-
-
-def assign_issue(project_root: Path, issue_id: str, assignee: str, author: str = "system") -> dict:
-    return update_issue_fields(project_root, issue_id, {"assignee": assignee}, author=author)
-
-
-def load_issue_detail(project_root: Path, issue_id: str) -> dict:
-    index = load_index(project_root)
-    issue = find_issue(index, issue_id)
-    directory = issue_dir(project_root, issue)
-    return {
-        "issue": issue,
-        "issue_md": (directory / "issue.md").read_text(encoding="utf-8") if (directory / "issue.md").exists() else "",
-        "implementation_md": (directory / "implementation.md").read_text(encoding="utf-8") if (directory / "implementation.md").exists() else "",
-        "comments": read_jsonl(directory / "comments.jsonl"),
-        "activity": read_jsonl(directory / "activity.jsonl"),
-    }
 
 
 def safe_relative(path: Path, root: Path) -> Path:

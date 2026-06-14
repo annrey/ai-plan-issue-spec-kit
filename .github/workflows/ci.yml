@@ -33,7 +33,7 @@ jobs:
           python -m pip install -e . pytest
 
       - name: Compile Python
-        run: python -m py_compile src/ai_plan_issue/planning.py src/ai_plan_issue/store.py src/ai_plan_issue/exporter.py src/ai_plan_issue/runtime.py src/ai_plan_issue/mutations.py src/ai_plan_issue/ledger.py src/ai_plan_issue/events.py src/ai_plan_issue/board_server.py src/ai_plan_issue/cli.py
+        run: python -m py_compile src/ai_plan_issue/planning.py src/ai_plan_issue/store.py src/ai_plan_issue/exporter.py src/ai_plan_issue/runtime.py src/ai_plan_issue/mutations.py src/ai_plan_issue/file_mutations.py src/ai_plan_issue/ledger.py src/ai_plan_issue/events.py src/ai_plan_issue/board_server.py src/ai_plan_issue/cli.py
 
       - name: Check browser JavaScript
         run: node --check src/ai_plan_issue/web/app.js
