@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from ai_plan_issue import cli
+from ai_plan_issue import events
 from ai_plan_issue import ledger
 
 
@@ -202,6 +203,22 @@ def test_cli_entrypoint_is_separate_from_ledger() -> None:
     assert "def main(" not in ledger_source
     assert "def build_parser" in cli_source
     assert "def main(" in cli_source
+
+
+def test_event_runtime_is_separate_from_ledger() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ledger_source = (root / "src" / "ai_plan_issue" / "ledger.py").read_text(encoding="utf-8")
+    events_source = (root / "src" / "ai_plan_issue" / "events.py").read_text(encoding="utf-8")
+
+    assert "def emit_event" not in ledger_source
+    assert "def append_activity_db" not in ledger_source
+    assert "def realtime_update_presence" not in ledger_source
+    assert "def realtime_list_presence" not in ledger_source
+    assert "def realtime_events_since" not in ledger_source
+    assert "def realtime_export" not in ledger_source
+    assert "def emit_event" in events_source
+    assert "def realtime_events_since" in events_source
+    assert callable(events.realtime_events_since)
 
 
 def test_codex_plugin_runs_when_copied_without_repository_root(tmp_path: Path) -> None:

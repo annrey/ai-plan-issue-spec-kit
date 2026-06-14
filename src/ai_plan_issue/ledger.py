@@ -21,6 +21,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from . import events
+
 
 SCHEMA_VERSION = "1.0"
 API_VERSION = "1.0"
@@ -928,74 +930,6 @@ def realtime_index(project_root: Path) -> dict:
     return {"schema_version": SCHEMA_VERSION, "api_version": API_VERSION, "issues": issue_rows(project_root)}
 
 
-def emit_event(
-    conn: sqlite3.Connection,
-    event_type: str,
-    actor: str,
-    issue_id: str | None,
-    revision: int | None,
-    payload: dict,
-) -> dict:
-    event = {
-        "id": f"evt-{uuid4().hex[:12]}",
-        "ts": now_iso(),
-        "actor": actor,
-        "issue_id": issue_id,
-        "revision": revision,
-        "payload": payload,
-        "type": event_type,
-    }
-    conn.execute(
-        """
-        INSERT INTO events (id, event_type, ts, actor, issue_id, revision, payload)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            event["id"],
-            event_type,
-            event["ts"],
-            actor,
-            issue_id,
-            revision,
-            json_dumps(payload),
-        ),
-    )
-    return event
-
-
-def append_activity_db(
-    conn: sqlite3.Connection,
-    issue: dict,
-    action: str,
-    body: str,
-    author: str = "system",
-) -> dict:
-    payload = {
-        "id": f"act-{uuid4().hex[:12]}",
-        "ts": now_iso(),
-        "author": author,
-        "action": action,
-        "body": body,
-    }
-    conn.execute(
-        """
-        INSERT INTO activity (id, issue_id, ts, author, action, body, data)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            payload["id"],
-            issue["id"],
-            payload["ts"],
-            author,
-            action,
-            body,
-            json_dumps(payload),
-        ),
-    )
-    emit_event(conn, "activity.created", author, issue["id"], int(issue.get("revision", 1)), payload)
-    return payload
-
-
 def upsert_issue_db(conn: sqlite3.Connection, issue: dict) -> None:
     revision = int(issue.get("revision", 1))
     issue["revision"] = revision
@@ -1071,7 +1005,7 @@ def import_ledger_to_db(project_root: Path, force: bool = False) -> dict:
                         json_dumps(activity_entry),
                     ),
                 )
-        emit_event(conn, "board.exported", "system", None, None, {"mode": "import", "issues": len(index["issues"])})
+        events.emit_event(conn, "board.exported", "system", None, None, {"mode": "import", "issues": len(index["issues"])})
         conn.execute("COMMIT")
     export_db_to_ledger(project_root)
     return realtime_index(project_root)
@@ -1190,8 +1124,8 @@ def realtime_update_issue_fields(
             issue[key] = value
         issue["revision"] = int(issue.get("revision", 1)) + 1
         upsert_issue_db(conn, issue)
-        append_activity_db(conn, issue, "updated", f"Updated fields {sorted(fields)} from {before} to {fields}.", author)
-        emit_event(conn, "issue.updated", author, issue_id, issue["revision"], issue)
+        events.append_activity_db(conn, issue, "updated", f"Updated fields {sorted(fields)} from {before} to {fields}.", author)
+        events.emit_event(conn, "issue.updated", author, issue_id, issue["revision"], issue)
         conn.execute("COMMIT")
     export_db_to_ledger(project_root)
     return issue
@@ -1226,9 +1160,9 @@ def realtime_append_comment(
             """,
             (payload["id"], issue_id, payload["ts"], author, body, json_dumps(payload)),
         )
-        append_activity_db(conn, issue, "commented", f"Comment added by {author}.", author=author)
-        emit_event(conn, "comment.created", author, issue_id, issue["revision"], payload)
-        emit_event(conn, "issue.updated", author, issue_id, issue["revision"], issue)
+        events.append_activity_db(conn, issue, "commented", f"Comment added by {author}.", author=author)
+        events.emit_event(conn, "comment.created", author, issue_id, issue["revision"], payload)
+        events.emit_event(conn, "issue.updated", author, issue_id, issue["revision"], issue)
         conn.execute("COMMIT")
     export_db_to_ledger(project_root)
     return payload
@@ -1300,14 +1234,14 @@ def realtime_create_manual_issue(
             "labels": [module] if module else [],
         }
         upsert_issue_db(conn, issue)
-        append_activity_db(conn, issue, "created", "Issue created manually.", author=author)
-        emit_event(conn, "issue.created", author, issue_id, issue["revision"], issue)
+        events.append_activity_db(conn, issue, "created", "Issue created manually.", author=author)
+        events.emit_event(conn, "issue.created", author, issue_id, issue["revision"], issue)
         if parent:
             parent.setdefault("children", []).append(issue_id)
             parent["revision"] = int(parent.get("revision", 1)) + 1
             upsert_issue_db(conn, parent)
-            append_activity_db(conn, parent, "split", f"Added child issue {issue_id}.", author=author)
-            emit_event(conn, "issue.updated", author, parent["id"], parent["revision"], parent)
+            events.append_activity_db(conn, parent, "split", f"Added child issue {issue_id}.", author=author)
+            events.emit_event(conn, "issue.updated", author, parent["id"], parent["revision"], parent)
         conn.execute("COMMIT")
     export_db_to_ledger(project_root)
     return issue
@@ -1363,19 +1297,19 @@ def realtime_split_issue(
             issues.append(issue)
             parent.setdefault("children", []).append(issue_id)
             upsert_issue_db(conn, issue)
-            append_activity_db(conn, issue, "created", f"Child issue split from {parent_id}.", author=author)
-            emit_event(conn, "issue.created", author, issue_id, issue["revision"], issue)
+            events.append_activity_db(conn, issue, "created", f"Child issue split from {parent_id}.", author=author)
+            events.emit_event(conn, "issue.created", author, issue_id, issue["revision"], issue)
             created.append(issue)
         parent["revision"] = int(parent.get("revision", 1)) + 1
         upsert_issue_db(conn, parent)
-        append_activity_db(
+        events.append_activity_db(
             conn,
             parent,
             "split",
             f"Split into children: {', '.join(issue['id'] for issue in created)}.",
             author=author,
         )
-        emit_event(conn, "issue.updated", author, parent_id, parent["revision"], parent)
+        events.emit_event(conn, "issue.updated", author, parent_id, parent["revision"], parent)
         conn.execute("COMMIT")
     export_db_to_ledger(project_root)
     return created
@@ -1411,8 +1345,8 @@ def realtime_claim_issue(
         issue["status"] = "in_progress"
         issue["revision"] = int(issue.get("revision", 1)) + 1
         upsert_issue_db(conn, issue)
-        append_activity_db(conn, issue, "claimed", f"Issue claimed by {agent}.", author=agent)
-        emit_event(conn, "issue.updated", agent, issue_id, issue["revision"], issue)
+        events.append_activity_db(conn, issue, "claimed", f"Issue claimed by {agent}.", author=agent)
+        events.emit_event(conn, "issue.updated", agent, issue_id, issue["revision"], issue)
         conn.execute("COMMIT")
     export_db_to_ledger(project_root)
     return issue
@@ -1475,8 +1409,8 @@ def realtime_update_implementation_notes(
         try:
             issue["revision"] = int(issue.get("revision", 1)) + 1
             upsert_issue_db(conn, issue)
-            append_activity_db(conn, issue, "implementation.updated", f"Implementation notes updated by {author}.", author=author)
-            emit_event(conn, "issue.updated", author, issue_id, issue["revision"], issue)
+            events.append_activity_db(conn, issue, "implementation.updated", f"Implementation notes updated by {author}.", author=author)
+            events.emit_event(conn, "issue.updated", author, issue_id, issue["revision"], issue)
             conn.execute("COMMIT")
         except Exception:
             try:
@@ -1526,102 +1460,6 @@ def realtime_prepare_run(
         },
     }
     return detail
-
-
-def realtime_update_presence(
-    project_root: Path,
-    actor: str,
-    display_name: str,
-    kind: str = "human",
-    issue_id: str | None = None,
-) -> dict:
-    ensure_realtime_store(project_root)
-    payload = {
-        "actor": actor,
-        "display_name": display_name or actor,
-        "kind": kind,
-        "issue_id": issue_id,
-        "updated_at": now_iso(),
-    }
-    with connect_db(project_root) as conn:
-        conn.execute("BEGIN IMMEDIATE")
-        conn.execute(
-            """
-            INSERT INTO presence (actor, display_name, kind, issue_id, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(actor) DO UPDATE SET
-              display_name=excluded.display_name,
-              kind=excluded.kind,
-              issue_id=excluded.issue_id,
-              updated_at=excluded.updated_at
-            """,
-            (actor, payload["display_name"], kind, issue_id, payload["updated_at"]),
-        )
-        emit_event(conn, "presence.updated", actor, issue_id, None, payload)
-        conn.execute("COMMIT")
-    return payload
-
-
-def realtime_list_presence(project_root: Path, max_age_seconds: int = 180) -> list[dict]:
-    ensure_realtime_store(project_root)
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
-    actors: list[dict] = []
-    with connect_db(project_root) as conn:
-        rows = conn.execute("SELECT * FROM presence ORDER BY updated_at DESC").fetchall()
-    for row in rows:
-        updated = parse_iso(row["updated_at"])
-        if updated and updated >= cutoff:
-            actors.append(
-                {
-                    "actor": row["actor"],
-                    "display_name": row["display_name"],
-                    "kind": row["kind"],
-                    "issue_id": row["issue_id"],
-                    "updated_at": row["updated_at"],
-                }
-            )
-    return actors
-
-
-def realtime_events_since(project_root: Path, last_event_id: str | None = None, limit: int = 100) -> list[dict]:
-    ensure_realtime_store(project_root)
-    with connect_db(project_root) as conn:
-        since_seq = 0
-        if last_event_id:
-            row = conn.execute("SELECT seq FROM events WHERE id = ?", (last_event_id,)).fetchone()
-            if row:
-                since_seq = int(row["seq"])
-        rows = conn.execute(
-            """
-            SELECT id, event_type, ts, actor, issue_id, revision, payload
-            FROM events
-            WHERE seq > ?
-            ORDER BY seq
-            LIMIT ?
-            """,
-            (since_seq, limit),
-        ).fetchall()
-    return [
-        {
-            "id": row["id"],
-            "type": row["event_type"],
-            "ts": row["ts"],
-            "actor": row["actor"],
-            "issue_id": row["issue_id"],
-            "revision": row["revision"],
-            "payload": json.loads(row["payload"]),
-        }
-        for row in rows
-    ]
-
-
-def realtime_export(project_root: Path, author: str = "system") -> dict:
-    index = export_db_to_ledger(project_root)
-    with connect_db(project_root) as conn:
-        conn.execute("BEGIN IMMEDIATE")
-        emit_event(conn, "board.exported", author, None, None, {"mode": "export", "issues": len(index["issues"])})
-        conn.execute("COMMIT")
-    return index
 
 
 def safe_relative(path: Path, root: Path) -> Path:

@@ -8,7 +8,7 @@ from urllib import error, request
 
 import pytest
 
-from ai_plan_issue import board_server, ledger
+from ai_plan_issue import board_server, events, ledger
 
 
 TASKS_MD = """# Tasks
@@ -144,7 +144,7 @@ def test_sse_resumes_after_last_event_id(board) -> None:
     project_root = board["project_root"]
     token = board["token"]
     base = board["base"]
-    last_id = ledger.realtime_events_since(project_root)[-1]["id"]
+    last_id = events.realtime_events_since(project_root)[-1]["id"]
 
     ledger.realtime_append_comment(project_root, "AI-001-01", "SSE update", "codex-local")
 

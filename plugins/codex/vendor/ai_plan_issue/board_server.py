@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlencode, urlparse
 
-from . import ledger
+from . import events, ledger
 
 
 class BoardHandler(BaseHTTPRequestHandler):
@@ -152,7 +152,7 @@ class BoardHandler(BaseHTTPRequestHandler):
             "read_requires_auth": self.read_requires_auth,
             "write_requires_auth": True,
             "events_url": "/api/v1/events",
-            "actors": ledger.realtime_list_presence(self.project_root),
+            "actors": events.realtime_list_presence(self.project_root),
         }
 
     def _stream_events(self, last_event_id: str | None) -> None:
@@ -165,13 +165,13 @@ class BoardHandler(BaseHTTPRequestHandler):
         current_id = last_event_id
         try:
             while True:
-                events = ledger.realtime_events_since(self.project_root, current_id, limit=100)
-                if not events:
+                stream_events = events.realtime_events_since(self.project_root, current_id, limit=100)
+                if not stream_events:
                     self.wfile.write(b": heartbeat\n\n")
                     self.wfile.flush()
                     time.sleep(1)
                     continue
-                for event in events:
+                for event in stream_events:
                     current_id = event["id"]
                     body = json.dumps(event, ensure_ascii=False)
                     self.wfile.write(f"id: {event['id']}\n".encode("utf-8"))
@@ -245,11 +245,11 @@ class BoardHandler(BaseHTTPRequestHandler):
                 self._send_json(index)
                 return
             if api_path == "/export":
-                index = ledger.realtime_export(self.project_root, author=str(payload.get("author", "web-board")))
+                index = events.realtime_export(self.project_root, author=str(payload.get("author", "web-board")))
                 self._send_json(index)
                 return
             if api_path == "/presence":
-                presence = ledger.realtime_update_presence(
+                presence = events.realtime_update_presence(
                     self.project_root,
                     actor=str(payload.get("actor", "web-user")),
                     display_name=str(payload.get("display_name", payload.get("actor", "web-user"))),
