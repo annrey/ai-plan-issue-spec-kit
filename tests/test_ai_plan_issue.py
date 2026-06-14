@@ -11,6 +11,7 @@ from ai_plan_issue import cli
 from ai_plan_issue import events
 from ai_plan_issue import exporter
 from ai_plan_issue import ledger
+from ai_plan_issue import planning
 from ai_plan_issue import store
 
 
@@ -273,6 +274,30 @@ def test_exporter_runtime_is_separate_from_ledger() -> None:
         assert f"def {name}" not in ledger_source
         assert f"def {name}" in exporter_source
         assert getattr(ledger, name) is getattr(exporter, name)
+
+
+def test_planning_runtime_is_separate_from_ledger() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ledger_source = (root / "src" / "ai_plan_issue" / "ledger.py").read_text(encoding="utf-8")
+    planning_source = (root / "src" / "ai_plan_issue" / "planning.py").read_text(encoding="utf-8")
+
+    assert "class ParsedTask" not in ledger_source
+    assert "class ParsedTask" in planning_source
+    assert ledger.ParsedTask is planning.ParsedTask
+    for name in (
+        "slugify",
+        "priority_for_group",
+        "module_for_group",
+        "category_for_group",
+        "parse_tasks",
+        "latest_feature_dir",
+        "task_group_key",
+        "next_parent_number",
+        "next_child_number",
+    ):
+        assert f"def {name}" not in ledger_source
+        assert f"def {name}" in planning_source
+        assert getattr(ledger, name) is getattr(planning, name)
 
 
 def test_codex_plugin_runs_when_copied_without_repository_root(tmp_path: Path) -> None:
