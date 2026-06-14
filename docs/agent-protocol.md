@@ -15,3 +15,11 @@ Required flow:
 
 Use `--expected-revision` when writing from a loaded issue snapshot.
 
+Common commands:
+
+```bash
+ai-plan-issue run --agent codex-local AI-001-01
+ai-plan-issue note --author codex-local AI-001-01 "Changed files, validation, and risks."
+ai-plan-issue status --author codex-local AI-001-01 in_review
+ai-plan-issue comment --author codex-local AI-001-01 "Ready for review."
+```

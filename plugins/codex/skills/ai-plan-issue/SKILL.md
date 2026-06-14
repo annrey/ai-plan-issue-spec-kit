@@ -21,7 +21,9 @@ Use the wrapper scripts in this plugin:
 ```bash
 plugins/codex/scripts/ai_plan_issue.sh generate
 plugins/codex/scripts/ai_plan_issue.sh claim --agent codex-local AI-001
+plugins/codex/scripts/ai_plan_issue.sh run --agent codex-local AI-001
 plugins/codex/scripts/ai_plan_issue.sh detail AI-001
+plugins/codex/scripts/ai_plan_issue.sh note --author codex-local AI-001 "Changed files and validation notes."
 plugins/codex/scripts/board_server.sh --port 8768
 ```
 
@@ -47,6 +49,6 @@ Before editing code for a large request:
 3. Read the issue detail, parent issue, dependencies, comments, activity, source `spec.md`, source `plan.md`, source `tasks.md`, and project guidance when present.
 4. Claim the issue before implementation.
 5. Keep edits scoped to the issue and its acceptance criteria.
-6. After work, update status, comments/activity, and implementation notes.
+6. After work, update status, comments/activity, and implementation notes with `note`.
 
 For multi-agent work, do not overwrite another active claim unless the user explicitly asks for a force claim.

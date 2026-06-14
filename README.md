@@ -69,6 +69,8 @@ Realtime store: .ai-plan-issue/ai-plan-issue.db
 
 ```bash
 scripts/ai-plan-issue claim --agent codex-local AI-001-01
+scripts/ai-plan-issue run --agent codex-local AI-001-01
+scripts/ai-plan-issue note --author codex-local AI-001-01 "Changed files and validation notes."
 scripts/ai-plan-issue status --author codex-local AI-001-01 in_review
 scripts/ai-plan-issue comment --author codex-local AI-001-01 "Ready for review."
 ```
@@ -180,6 +182,8 @@ Update issues from CLI:
 
 ```bash
 scripts/ai-plan-issue claim --agent codex-local AI-001-01
+scripts/ai-plan-issue run --agent codex-local AI-001-01
+scripts/ai-plan-issue note --author codex-local AI-001-01 "Changed files and validation notes."
 scripts/ai-plan-issue status --author codex-local AI-001-01 in_review
 scripts/ai-plan-issue comment --author codex-local AI-001-01 "Ready for review."
 ```
@@ -236,4 +240,3 @@ SSE event types:
 | --- | --- |
 | [github/spec-kit](https://github.com/github/spec-kit) | Referenced for the original extension workflow, task file conventions, and optional compatibility layer. The standalone runtime does not require Spec Kit. |
 | [multica-ai/multica](https://github.com/multica-ai/multica) | Referenced for the product direction of human-agent collaboration around issue boards, agent ownership, comments, and status transitions. No direct source code from Multica is copied. |
-

@@ -8,6 +8,7 @@ This Codex plugin teaches Codex to work through AI Plan Issue: generate issue tr
 - Reviewable export: `.ai-plan-issue/index.json`, `board.md`, per-issue `issue.md`, `comments.jsonl`, and `activity.jsonl`.
 - Web API: local board server with `/api/v1/*`, project token auth, and SSE events.
 - Wrapper scripts call the standalone Python package in this repository.
+- The plugin includes a vendored copy of the standalone package so `plugins/codex/` can run when installed by itself.
 
 ## Commands
 
@@ -15,6 +16,8 @@ This Codex plugin teaches Codex to work through AI Plan Issue: generate issue tr
 plugins/codex/scripts/ai_plan_issue.sh generate --tasks tasks.md
 plugins/codex/scripts/board_server.sh --port 8768
 plugins/codex/scripts/ai_plan_issue.sh claim --agent codex-local AI-001-01
+plugins/codex/scripts/ai_plan_issue.sh run --agent codex-local AI-001-01
+plugins/codex/scripts/ai_plan_issue.sh note --author codex-local AI-001-01 "Changed files and validation notes."
 plugins/codex/scripts/ai_plan_issue.sh status --author codex-local --expected-revision 1 AI-001-01 in_review
 plugins/codex/scripts/ai_plan_issue.sh comment --author codex-local AI-001-01 "Ready for review."
 ```

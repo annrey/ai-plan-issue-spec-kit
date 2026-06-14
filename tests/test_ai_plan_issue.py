@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from ai_plan_issue import ledger
 
@@ -85,3 +89,120 @@ def test_revision_conflict_is_rejected(tmp_path: Path) -> None:
         assert "stale issue revision" in str(exc).lower()
     else:
         raise AssertionError("Expected ConflictError")
+
+
+def test_external_state_dir_is_rejected_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    outside = tmp_path.parent / "outside-state"
+    monkeypatch.setenv("AI_PLAN_ISSUE_DIR", str(outside))
+
+    with pytest.raises(ValueError, match="outside project root"):
+        ledger.issues_root(tmp_path)
+
+
+def test_force_never_deletes_project_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tasks = tmp_path / "tasks.md"
+    keep = tmp_path / "keep.txt"
+    tasks.write_text(TASKS_MD, encoding="utf-8")
+    keep.write_text("do not delete", encoding="utf-8")
+    monkeypatch.setenv("AI_PLAN_ISSUE_DIR", ".")
+
+    with pytest.raises(ValueError, match="refusing to use project root"):
+        ledger.generate_issues(tmp_path, None, force=True, tasks_file=tasks)
+
+    assert keep.read_text(encoding="utf-8") == "do not delete"
+
+
+def test_issue_path_traversal_is_rejected(tmp_path: Path) -> None:
+    issue = {"id": "AI-999", "slug": "escape", "path": "../escape"}
+
+    with pytest.raises(ValueError, match="Unsafe issue path"):
+        ledger.issue_dir(tmp_path, issue)
+
+
+def test_implementation_note_updates_detail_and_revision(tmp_path: Path) -> None:
+    tasks = tmp_path / "tasks.md"
+    tasks.write_text(TASKS_MD, encoding="utf-8")
+    ledger.generate_issues(tmp_path, None, force=True, tasks_file=tasks)
+    ledger.import_ledger_to_db(tmp_path, force=True)
+
+    before = ledger.realtime_find_issue(tmp_path, "AI-001-01")
+    updated = ledger.realtime_update_implementation_notes(
+        tmp_path,
+        "AI-001-01",
+        "Changed files:\n- src/example.py",
+        author="codex-local",
+        expected_revision=before["revision"],
+    )
+
+    assert updated["revision"] == before["revision"] + 1
+    detail = ledger.realtime_load_issue_detail(tmp_path, "AI-001-01")
+    assert "Changed files:" in detail["implementation_md"]
+    assert "src/example.py" in detail["implementation_md"]
+
+
+def test_prepare_run_claims_issue_and_returns_context(tmp_path: Path) -> None:
+    tasks = tmp_path / "tasks.md"
+    tasks.write_text(TASKS_MD, encoding="utf-8")
+    ledger.generate_issues(tmp_path, None, force=True, tasks_file=tasks)
+    ledger.import_ledger_to_db(tmp_path, force=True)
+
+    context = ledger.realtime_prepare_run(tmp_path, "AI-001-01", agent="codex-local", ttl_minutes=30)
+
+    assert context["issue"]["id"] == "AI-001-01"
+    assert context["issue"]["claimed_by"] == "codex-local"
+    assert context["protocol"]["next_steps"][0] == "Read issue_md and implementation_md before editing code."
+
+
+def test_cli_json_error_contract(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    exit_code = ledger.main(["detail", "--project-root", str(tmp_path), "--json", "AI-404"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 4
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "not_found"
+    assert "AI-404" in payload["error"]["message"]
+
+
+def test_cli_json_claim_conflict_contract(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    tasks = tmp_path / "tasks.md"
+    tasks.write_text(TASKS_MD, encoding="utf-8")
+    ledger.generate_issues(tmp_path, None, force=True, tasks_file=tasks)
+    ledger.import_ledger_to_db(tmp_path, force=True)
+    ledger.realtime_claim_issue(tmp_path, "AI-001-01", "agent-a", ttl_minutes=30)
+
+    exit_code = ledger.main(
+        [
+            "claim",
+            "--project-root",
+            str(tmp_path),
+            "--json",
+            "--agent",
+            "agent-b",
+            "AI-001-01",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 3
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "conflict"
+    assert "already claimed by agent-a" in payload["error"]["message"]
+
+
+def test_codex_plugin_runs_when_copied_without_repository_root(tmp_path: Path) -> None:
+    source = Path(__file__).resolve().parents[1] / "plugins" / "codex"
+    plugin = tmp_path / "codex-plugin"
+    shutil.copytree(source, plugin)
+
+    result = subprocess.run(
+        [str(plugin / "scripts" / "ai_plan_issue.sh"), "--help"],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "Manage the AI Plan Issue ledger" in result.stdout
