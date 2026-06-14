@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from . import store
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -111,7 +113,7 @@ def realtime_update_presence(
         "issue_id": issue_id,
         "updated_at": now_iso(),
     }
-    with ledger.connect_db(project_root) as conn:
+    with store.connect_db(project_root) as conn:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             """
@@ -136,7 +138,7 @@ def realtime_list_presence(project_root: Path, max_age_seconds: int = 180) -> li
     ledger.ensure_realtime_store(project_root)
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
     actors: list[dict] = []
-    with ledger.connect_db(project_root) as conn:
+    with store.connect_db(project_root) as conn:
         rows = conn.execute("SELECT * FROM presence ORDER BY updated_at DESC").fetchall()
     for row in rows:
         updated = parse_iso(row["updated_at"])
@@ -157,7 +159,7 @@ def realtime_events_since(project_root: Path, last_event_id: str | None = None, 
     from . import ledger
 
     ledger.ensure_realtime_store(project_root)
-    with ledger.connect_db(project_root) as conn:
+    with store.connect_db(project_root) as conn:
         since_seq = 0
         if last_event_id:
             row = conn.execute("SELECT seq FROM events WHERE id = ?", (last_event_id,)).fetchone()
@@ -191,7 +193,7 @@ def realtime_export(project_root: Path, author: str = "system") -> dict:
     from . import ledger
 
     index = ledger.export_db_to_ledger(project_root)
-    with ledger.connect_db(project_root) as conn:
+    with store.connect_db(project_root) as conn:
         conn.execute("BEGIN IMMEDIATE")
         emit_event(conn, "board.exported", author, None, None, {"mode": "export", "issues": len(index["issues"])})
         conn.execute("COMMIT")

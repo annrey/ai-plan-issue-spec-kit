@@ -10,6 +10,7 @@ import pytest
 from ai_plan_issue import cli
 from ai_plan_issue import events
 from ai_plan_issue import ledger
+from ai_plan_issue import store
 
 
 TASKS_MD = """# Tasks
@@ -219,6 +220,33 @@ def test_event_runtime_is_separate_from_ledger() -> None:
     assert "def emit_event" in events_source
     assert "def realtime_events_since" in events_source
     assert callable(events.realtime_events_since)
+
+
+def test_store_runtime_is_separate_from_ledger() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ledger_source = (root / "src" / "ai_plan_issue" / "ledger.py").read_text(encoding="utf-8")
+    store_source = (root / "src" / "ai_plan_issue" / "store.py").read_text(encoding="utf-8")
+
+    for name in (
+        "state_root",
+        "issues_root",
+        "index_path",
+        "write_lock_path",
+        "path_is_relative_to",
+        "database_path",
+        "token_path",
+        "get_project_token",
+        "connect_db",
+        "init_realtime_db",
+        "realtime_issue_count",
+        "json_dumps",
+        "issue_from_row",
+        "issue_rows",
+        "realtime_index",
+    ):
+        assert f"def {name}" not in ledger_source
+        assert f"def {name}" in store_source
+        assert getattr(ledger, name) is getattr(store, name)
 
 
 def test_codex_plugin_runs_when_copied_without_repository_root(tmp_path: Path) -> None:
