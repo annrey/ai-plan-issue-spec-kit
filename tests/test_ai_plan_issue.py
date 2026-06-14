@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from ai_plan_issue import cli
+from ai_plan_issue import context_bundle
 from ai_plan_issue import events
 from ai_plan_issue import exporter
 from ai_plan_issue import file_mutations
@@ -159,6 +160,58 @@ def test_prepare_run_claims_issue_and_returns_context(tmp_path: Path) -> None:
     assert context["issue"]["id"] == "AI-001-01"
     assert context["issue"]["claimed_by"] == "codex-local"
     assert context["protocol"]["next_steps"][0] == "Read issue_md and implementation_md before editing code."
+
+
+def test_context_bundle_collects_agent_execution_context(tmp_path: Path) -> None:
+    tasks = tmp_path / "tasks.md"
+    tasks.write_text(TASKS_MD, encoding="utf-8")
+    ledger.generate_issues(tmp_path, None, force=True, tasks_file=tasks)
+    ledger.import_ledger_to_db(tmp_path, force=True)
+
+    dependency = ledger.realtime_find_issue(tmp_path, "AI-001-01")
+    ledger.realtime_update_issue_fields(
+        tmp_path,
+        "AI-001-02",
+        {"depends_on": ["AI-001-01"]},
+        author="codex-local",
+    )
+    ledger.realtime_append_comment(tmp_path, "AI-001-02", "Use this context before editing.", "reviewer")
+    ledger.realtime_update_implementation_notes(
+        tmp_path,
+        "AI-001-02",
+        "Touched src/ai_plan_issue/context_bundle.py",
+        author="codex-local",
+    )
+
+    bundle = context_bundle.build_context_bundle(tmp_path, "AI-001-02")
+
+    assert bundle["api_version"] == "1.0"
+    assert bundle["context_version"] == "1.0"
+    assert bundle["issue"]["id"] == "AI-001-02"
+    assert bundle["parent"]["id"] == "AI-001"
+    assert bundle["dependencies"][0]["id"] == dependency["id"]
+    assert bundle["missing_dependency_ids"] == []
+    assert bundle["comments"][0]["body"] == "Use this context before editing."
+    assert "context_bundle.py" in bundle["implementation_md"]
+    assert bundle["files"]["issue_md"].endswith("/issue.md")
+    assert bundle["files"]["implementation_md"].endswith("/implementation.md")
+    assert bundle["module"]["name"] == "board-foundation"
+    assert bundle["milestone"]["name"] == "Board foundation"
+
+
+def test_cli_context_outputs_context_bundle(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    tasks = tmp_path / "tasks.md"
+    tasks.write_text(TASKS_MD, encoding="utf-8")
+    ledger.generate_issues(tmp_path, None, force=True, tasks_file=tasks)
+    ledger.import_ledger_to_db(tmp_path, force=True)
+
+    exit_code = cli.main(["context", "--project-root", str(tmp_path), "--json", "AI-001-01"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["issue"]["id"] == "AI-001-01"
+    assert payload["files"]["issue_md"].endswith("/issue.md")
 
 
 def test_cli_json_error_contract(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
@@ -325,10 +378,25 @@ def test_realtime_runtime_is_separate_from_ledger() -> None:
         assert getattr(ledger, name) is getattr(runtime, name)
 
 
+def test_context_bundle_runtime_is_separate_from_ledger() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ledger_source = (root / "src" / "ai_plan_issue" / "ledger.py").read_text(encoding="utf-8")
+    context_source = (root / "src" / "ai_plan_issue" / "context_bundle.py").read_text(encoding="utf-8")
+
+    for name in (
+        "parse_include",
+        "issue_summary",
+        "build_context_bundle",
+    ):
+        assert f"def {name}" not in ledger_source
+        assert f"def {name}" in context_source
+    assert ledger.realtime_load_context is context_bundle.build_context_bundle
+
+
 def test_core_modules_do_not_depend_on_ledger_facade() -> None:
     root = Path(__file__).resolve().parents[1] / "src" / "ai_plan_issue"
 
-    for module_name in ("planning", "store", "exporter", "events", "runtime", "mutations", "file_mutations"):
+    for module_name in ("planning", "store", "exporter", "events", "runtime", "mutations", "file_mutations", "context_bundle"):
         source = (root / f"{module_name}.py").read_text(encoding="utf-8")
         assert "from . import ledger" not in source
         assert "import ledger" not in source

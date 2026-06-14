@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import exporter, file_mutations, mutations, planning, runtime, store
+from . import context_bundle, exporter, file_mutations, mutations, planning, runtime, store
 
 
 SCHEMA_VERSION = store.SCHEMA_VERSION
@@ -102,6 +102,7 @@ realtime_load_index = runtime.realtime_load_index
 realtime_find_issue = runtime.realtime_find_issue
 check_expected_revision = runtime.check_expected_revision
 realtime_load_issue_detail = runtime.realtime_load_issue_detail
+realtime_load_context = context_bundle.build_context_bundle
 realtime_update_issue_fields = mutations.realtime_update_issue_fields
 realtime_append_comment = mutations.realtime_append_comment
 realtime_create_manual_issue = mutations.realtime_create_manual_issue

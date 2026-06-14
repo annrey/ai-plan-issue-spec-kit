@@ -122,6 +122,12 @@ def cmd_detail(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_context(args: argparse.Namespace) -> int:
+    root = ledger.project_root_from(Path(args.project_root) if args.project_root else None)
+    print_json(ledger.realtime_load_context(root, args.issue_id, include=args.include))
+    return 0
+
+
 def add_json_flag(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", dest="json_output", help="Emit machine-readable JSON errors.")
 
@@ -211,6 +217,13 @@ def build_parser() -> argparse.ArgumentParser:
     detail.add_argument("--project-root")
     detail.add_argument("issue_id")
     detail.set_defaults(func=cmd_detail)
+
+    context = subparsers.add_parser("context", help="Print agent execution context for an issue")
+    add_json_flag(context)
+    context.add_argument("--project-root")
+    context.add_argument("--include", help="Comma-separated context sections to include.")
+    context.add_argument("issue_id")
+    context.set_defaults(func=cmd_context)
 
     return parser
 

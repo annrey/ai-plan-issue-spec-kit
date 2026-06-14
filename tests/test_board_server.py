@@ -140,6 +140,22 @@ def test_http_rejects_empty_patch_invalid_claim_ttl_and_revision_conflicts(board
     assert "Stale issue revision" in payload["error"]
 
 
+def test_http_issue_context_endpoint_returns_agent_bundle(board) -> None:
+    base = board["base"]
+    token = board["token"]
+
+    ledger.realtime_append_comment(board["project_root"], "AI-001-01", "HTTP context comment", "codex-local")
+
+    status, payload = request_json(base, "/api/v1/issues/AI-001-01/context", token=token)
+
+    assert status == 200
+    assert payload["context_version"] == "1.0"
+    assert payload["issue"]["id"] == "AI-001-01"
+    assert payload["parent"]["id"] == "AI-001"
+    assert payload["comments"][0]["body"] == "HTTP context comment"
+    assert payload["files"]["activity_jsonl"].endswith("/activity.jsonl")
+
+
 def test_sse_resumes_after_last_event_id(board) -> None:
     project_root = board["project_root"]
     token = board["token"]

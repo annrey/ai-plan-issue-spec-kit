@@ -23,6 +23,7 @@ plugins/codex/scripts/ai_plan_issue.sh generate
 plugins/codex/scripts/ai_plan_issue.sh claim --agent codex-local AI-001
 plugins/codex/scripts/ai_plan_issue.sh run --agent codex-local AI-001
 plugins/codex/scripts/ai_plan_issue.sh detail AI-001
+plugins/codex/scripts/ai_plan_issue.sh context AI-001
 plugins/codex/scripts/ai_plan_issue.sh note --author codex-local AI-001 "Changed files and validation notes."
 plugins/codex/scripts/board_server.sh --port 8768
 ```
@@ -46,7 +47,7 @@ Before editing code for a large request:
 
 1. Generate or refresh issues from `tasks.md` when needed.
 2. Select a concrete issue, not just a broad goal.
-3. Read the issue detail, parent issue, dependencies, comments, activity, source `spec.md`, source `plan.md`, source `tasks.md`, and project guidance when present.
+3. Load `context` for the issue and read the issue detail, parent issue, children, dependencies, comments, activity, implementation notes, source `spec.md`, source `plan.md`, source `tasks.md`, and project guidance when present.
 4. Claim the issue before implementation.
 5. Keep edits scoped to the issue and its acceptance criteria.
 6. After work, update status, comments/activity, and implementation notes with `note`.

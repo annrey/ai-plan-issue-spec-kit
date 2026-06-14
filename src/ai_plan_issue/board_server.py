@@ -202,6 +202,16 @@ class BoardHandler(BaseHTTPRequestHandler):
                 if api_path == "/events":
                     self._stream_events(self.headers.get("Last-Event-ID"))
                     return
+                if api_path.startswith("/issues/") and api_path.endswith("/context"):
+                    issue_id = unquote(api_path[len("/issues/") : -len("/context")])
+                    self._send_json(
+                        ledger.realtime_load_context(
+                            self.project_root,
+                            issue_id,
+                            include=query.get("include", [None])[0],
+                        )
+                    )
+                    return
                 if api_path.startswith("/issues/"):
                     issue_id = unquote(api_path.removeprefix("/issues/"))
                     self._send_json(ledger.realtime_load_issue_detail(self.project_root, issue_id))
@@ -310,7 +320,7 @@ class BoardHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
             if api_path.startswith("/issues/"):
                 issue_id = unquote(api_path.removeprefix("/issues/"))
-                allowed = {"status", "priority", "assignee", "module", "category"}
+                allowed = {"status", "priority", "assignee", "module", "category", "depends_on"}
                 fields = {key: payload[key] for key in allowed if key in payload}
                 issue = ledger.realtime_update_issue_fields(
                     self.project_root,
