@@ -637,6 +637,8 @@ def generate_issues(
 
 
 def update_issue_fields(project_root: Path, issue_id: str, fields: dict, author: str = "system") -> dict:
+    if not fields:
+        raise ValueError("No editable issue fields provided.")
     with issue_write_lock(project_root):
         index = load_index(project_root)
         issue = find_issue(index, issue_id)
@@ -774,6 +776,11 @@ def split_issue(project_root: Path, parent_id: str, child_titles: list[str], aut
 
 
 def claim_issue(project_root: Path, issue_id: str, agent: str, ttl_minutes: int, force: bool = False) -> dict:
+    agent = agent.strip()
+    if not agent:
+        raise ValueError("Claim agent is required.")
+    if ttl_minutes <= 0:
+        raise ValueError("Claim ttl_minutes must be positive.")
     with issue_write_lock(project_root):
         index = load_index(project_root)
         issue = find_issue(index, issue_id)
@@ -1170,6 +1177,8 @@ def realtime_update_issue_fields(
     expected_revision: int | None = None,
 ) -> dict:
     ensure_realtime_store(project_root)
+    if not fields:
+        raise ValueError("No editable issue fields provided.")
     with connect_db(project_root) as conn:
         conn.execute("BEGIN IMMEDIATE")
         issue = realtime_find_issue(project_root, issue_id, conn)
@@ -1383,6 +1392,11 @@ def realtime_claim_issue(
     expected_revision: int | None = None,
 ) -> dict:
     ensure_realtime_store(project_root)
+    agent = agent.strip()
+    if not agent:
+        raise ValueError("Claim agent is required.")
+    if ttl_minutes <= 0:
+        raise ValueError("Claim ttl_minutes must be positive.")
     with connect_db(project_root) as conn:
         conn.execute("BEGIN IMMEDIATE")
         issue = realtime_find_issue(project_root, issue_id, conn)

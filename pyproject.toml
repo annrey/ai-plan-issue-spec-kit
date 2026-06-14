@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-plan-issue"
-version = "1.0.0"
+version = "1.0.1"
 description = "Local-first issue planning and collaboration board for AI-assisted development"
 readme = "README.md"
 requires-python = ">=3.10"

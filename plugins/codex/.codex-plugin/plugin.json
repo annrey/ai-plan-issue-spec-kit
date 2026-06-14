@@ -1,6 +1,6 @@
 {
   "name": "ai-plan-issue",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Turn large development goals into collaborative issue plans with a realtime local board for Codex-led work.",
   "author": {
     "name": "AI Plan Issue"
