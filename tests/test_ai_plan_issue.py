@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from ai_plan_issue import cli
 from ai_plan_issue import ledger
 
 
@@ -154,7 +155,7 @@ def test_prepare_run_claims_issue_and_returns_context(tmp_path: Path) -> None:
 
 
 def test_cli_json_error_contract(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
-    exit_code = ledger.main(["detail", "--project-root", str(tmp_path), "--json", "AI-404"])
+    exit_code = cli.main(["detail", "--project-root", str(tmp_path), "--json", "AI-404"])
 
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
@@ -171,7 +172,7 @@ def test_cli_json_claim_conflict_contract(capsys: pytest.CaptureFixture[str], tm
     ledger.import_ledger_to_db(tmp_path, force=True)
     ledger.realtime_claim_issue(tmp_path, "AI-001-01", "agent-a", ttl_minutes=30)
 
-    exit_code = ledger.main(
+    exit_code = cli.main(
         [
             "claim",
             "--project-root",
@@ -189,6 +190,18 @@ def test_cli_json_claim_conflict_contract(capsys: pytest.CaptureFixture[str], tm
     assert payload["ok"] is False
     assert payload["error"]["code"] == "conflict"
     assert "already claimed by agent-a" in payload["error"]["message"]
+
+
+def test_cli_entrypoint_is_separate_from_ledger() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ledger_source = (root / "src" / "ai_plan_issue" / "ledger.py").read_text(encoding="utf-8")
+    cli_source = (root / "src" / "ai_plan_issue" / "cli.py").read_text(encoding="utf-8")
+
+    assert "def cmd_" not in ledger_source
+    assert "def build_parser" not in ledger_source
+    assert "def main(" not in ledger_source
+    assert "def build_parser" in cli_source
+    assert "def main(" in cli_source
 
 
 def test_codex_plugin_runs_when_copied_without_repository_root(tmp_path: Path) -> None:
