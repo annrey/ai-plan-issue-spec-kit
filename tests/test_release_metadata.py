@@ -35,6 +35,15 @@ def test_python_package_includes_board_assets() -> None:
     assert "web/styles.css" in package_data
 
 
+def test_python_package_uses_modern_license_metadata() -> None:
+    root = Path(__file__).resolve().parents[1]
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    project = pyproject["project"]
+
+    assert project["license"] == "MIT"
+    assert project["license-files"] == ["LICENSE"]
+
+
 def test_codex_plugin_release_contract() -> None:
     root = Path(__file__).resolve().parents[1]
     plugin_root = root / "plugins" / "codex"
