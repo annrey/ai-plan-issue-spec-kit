@@ -1,0 +1,62 @@
+schema_version: "1.0"
+
+extension:
+  id: ai-plan-issue
+  name: "AI Plan Issue"
+  version: "0.2.0"
+  description: "Compatibility wrapper that exposes AI Plan Issue through Spec Kit commands"
+  category: "process"
+  effect: "read-write"
+  author: ai-plan-issue
+  repository: https://github.com/annrey/ai-plan-issue-spec-kit
+  license: MIT
+
+requires:
+  speckit_version: ">=0.10.0"
+
+provides:
+  commands:
+    - name: speckit.ai-plan-issue.generate
+      file: commands/speckit.ai-plan-issue.generate.md
+      description: "Generate parent and child issues from tasks.md"
+    - name: speckit.ai-plan-issue.comment
+      file: commands/speckit.ai-plan-issue.comment.md
+      description: "Append a persistent comment to an AI plan issue"
+    - name: speckit.ai-plan-issue.split
+      file: commands/speckit.ai-plan-issue.split.md
+      description: "Split a large issue into child issues and update the parent issue tree"
+    - name: speckit.ai-plan-issue.refine
+      file: commands/speckit.ai-plan-issue.refine.md
+      description: "Refine issues from comments, activity, and design documents"
+    - name: speckit.ai-plan-issue.run
+      file: commands/speckit.ai-plan-issue.run.md
+      description: "Execute development work for one issue using the AI issue protocol"
+    - name: speckit.ai-plan-issue.claim
+      file: commands/speckit.ai-plan-issue.claim.md
+      description: "Claim one issue for a human or agent and record the claim"
+    - name: speckit.ai-plan-issue.assign
+      file: commands/speckit.ai-plan-issue.assign.md
+      description: "Assign an issue to a human or agent"
+    - name: speckit.ai-plan-issue.web
+      file: commands/speckit.ai-plan-issue.web.md
+      description: "Start the local AI plan issue web board"
+
+  config:
+    - name: ai-plan-issue-config.yml
+      template: config-template.yml
+      description: "AI Plan Issue extension configuration"
+      required: true
+
+hooks:
+  after_tasks:
+    command: speckit.ai-plan-issue.generate
+    optional: true
+    prompt: "Generate collaborative AI plan issues from tasks.md?"
+    description: "Convert the generated task list into parent and child issues"
+
+tags:
+  - "ai"
+  - "issues"
+  - "kanban"
+  - "agent"
+  - "collaboration"

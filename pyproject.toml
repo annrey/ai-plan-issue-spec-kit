@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-plan-issue"
+version = "1.0.0"
+description = "Local-first issue planning and collaboration board for AI-assisted development"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "AI Plan Issue" }
+]
+dependencies = []
+
+[project.scripts]
+ai-plan-issue = "ai_plan_issue.cli:main"
+ai-plan-issue-board = "ai_plan_issue.board_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ai_plan_issue = ["web/index.html", "web/app.js", "web/styles.css"]

@@ -1,0 +1,31 @@
+# AI Plan Issue Configuration
+
+issue_id_prefix: "AI"
+
+board:
+  host: "127.0.0.1"
+  port: 8765
+  open_browser: false
+  realtime: true
+  database: ".specify/issues/ai-plan-issue.db"
+  token_file: ".specify/issues/ai-plan-issue.token"
+  read_requires_token_on_lan: true
+  write_requires_token: true
+
+statuses:
+  - backlog
+  - todo
+  - in_progress
+  - blocked
+  - needs_review
+  - in_review
+  - done
+
+agents:
+  default_author: "ai"
+  claim_ttl_minutes: 120
+
+sync:
+  mode: "sqlite"
+  export_markdown: true
+  external_refs: []

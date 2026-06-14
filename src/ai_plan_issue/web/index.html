@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Plan Issue Board</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="workspace-switcher">
+          <div class="workspace-mark">A</div>
+          <div>
+            <div class="workspace-name">AI Plan Issue</div>
+            <div class="workspace-subtitle">Local collaboration board</div>
+          </div>
+        </div>
+        <nav class="nav-list" aria-label="Primary">
+          <button type="button">Inbox</button>
+          <button type="button">My Issues</button>
+          <button type="button" class="active">Issues</button>
+          <button type="button">Agents</button>
+          <button type="button">Modules</button>
+          <button type="button">Activity</button>
+          <button type="button">Settings</button>
+        </nav>
+        <section class="sidebar-section" aria-label="Online actors">
+          <div class="sidebar-heading">
+            <span>Online</span>
+            <strong id="actor-count">0</strong>
+          </div>
+          <div id="actor-list" class="actor-list"></div>
+        </section>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div class="breadcrumb">
+            <span class="crumb-mark">A</span>
+            <span>AI Plan Issue</span>
+            <span class="chevron">/</span>
+            <strong>Issues</strong>
+          </div>
+          <div class="topbar-actions">
+            <span id="connection-status" class="connection-status offline">Offline</span>
+            <span id="issue-count" class="issue-count">0 Issues</span>
+            <button id="refresh-btn" class="secondary-btn" type="button">Refresh</button>
+            <button id="new-issue-btn" class="primary-btn" type="button">New Issue</button>
+          </div>
+        </header>
+
+        <section class="toolbar" aria-label="Board tools">
+          <div id="view-filters" class="segmented" aria-label="Issue filters">
+            <button class="tool-btn active" type="button" data-filter="all">All</button>
+            <button class="tool-btn" type="button" data-filter="parent">Parents</button>
+            <button class="tool-btn" type="button" data-filter="step">Steps</button>
+            <button class="tool-btn" type="button" data-filter="claimed">Claimed</button>
+            <button class="tool-btn" type="button" data-filter="review">Review</button>
+          </div>
+          <div class="toolbar-spacer"></div>
+          <label class="toolbar-select">
+            Module
+            <select id="module-filter"></select>
+          </label>
+        </section>
+
+        <section id="metrics" class="metrics" aria-label="Board metrics"></section>
+
+        <section class="work-area" aria-label="Issue workspace">
+          <aside class="context-panel" aria-label="Issue hierarchy">
+            <div class="panel-section">
+              <div class="panel-header">
+                <h2>Modules</h2>
+                <span id="module-count">0</span>
+              </div>
+              <div id="module-list" class="module-list"></div>
+            </div>
+            <div class="panel-section hierarchy-section">
+              <div class="panel-header">
+                <h2>Hierarchy</h2>
+                <span id="parent-count">0</span>
+              </div>
+              <div id="hierarchy" class="hierarchy"></div>
+            </div>
+          </aside>
+
+          <section id="board" class="board" aria-label="Issue board"></section>
+        </section>
+      </main>
+    </div>
+
+    <aside id="drawer" class="drawer" aria-label="Issue details" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <div id="drawer-id" class="drawer-id"></div>
+          <h2 id="drawer-title"></h2>
+        </div>
+        <button id="drawer-close" class="icon-btn" type="button" aria-label="Close details">Close</button>
+      </div>
+
+      <div id="detail-meta" class="detail-meta"></div>
+
+      <div class="drawer-controls">
+        <label>
+          Status
+          <select id="status-select"></select>
+        </label>
+        <label>
+          Priority
+          <select id="priority-select"></select>
+        </label>
+        <label>
+          Category
+          <select id="category-select"></select>
+        </label>
+        <label>
+          Assignee
+          <input id="assignee-input" placeholder="Optional" />
+        </label>
+        <label>
+          Module
+          <input id="module-input" placeholder="Optional" />
+        </label>
+      </div>
+
+      <div class="drawer-actions">
+        <button id="claim-btn" type="button" class="secondary-btn">Claim</button>
+        <button id="add-child-btn" type="button" class="secondary-btn">Add Child</button>
+        <button id="copy-run-btn" type="button" class="secondary-btn">Copy Run Command</button>
+      </div>
+
+      <section class="detail-block">
+        <h3>Relations</h3>
+        <div id="relations" class="relations"></div>
+      </section>
+
+      <section class="detail-block">
+        <h3>Issue</h3>
+        <pre id="issue-md" class="markdown-preview"></pre>
+      </section>
+
+      <section class="detail-block">
+        <h3>Comments</h3>
+        <div id="comments" class="timeline"></div>
+        <form id="comment-form" class="comment-form">
+          <textarea id="comment-body" rows="3" placeholder="Add a comment for humans or agents"></textarea>
+          <button type="submit" class="primary-btn">Comment</button>
+        </form>
+      </section>
+
+      <section class="detail-block">
+        <h3>Activity</h3>
+        <div id="activity" class="timeline compact"></div>
+      </section>
+    </aside>
+
+    <div id="modal-backdrop" class="modal-backdrop" hidden>
+      <form id="new-issue-form" class="modal" aria-label="New issue">
+        <div class="modal-header">
+          <h2>New Issue</h2>
+          <button id="modal-close" type="button" class="icon-btn">Close</button>
+        </div>
+        <label>
+          Title
+          <input id="new-title" name="title" required />
+        </label>
+        <label>
+          Summary
+          <textarea id="new-summary" name="summary" rows="4"></textarea>
+        </label>
+        <div class="modal-grid">
+          <label>
+            Status
+            <select id="new-status" name="status"></select>
+          </label>
+          <label>
+            Priority
+            <select id="new-priority" name="priority"></select>
+          </label>
+        </div>
+        <div class="modal-grid">
+          <label>
+            Category
+            <select id="new-category" name="category"></select>
+          </label>
+          <label>
+            Module
+            <input id="new-module" name="module" placeholder="Optional" />
+          </label>
+        </div>
+        <label>
+          Parent ID
+          <input id="new-parent" name="parent_id" placeholder="Optional" />
+        </label>
+        <div class="modal-footer">
+          <button type="submit" class="primary-btn">Create Issue</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

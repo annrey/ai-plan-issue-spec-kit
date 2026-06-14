@@ -1,0 +1,40 @@
+{
+  "name": "ai-plan-issue",
+  "version": "1.0.0",
+  "description": "Turn large development goals into collaborative issue plans with a realtime local board for Codex-led work.",
+  "author": {
+    "name": "AI Plan Issue"
+  },
+  "repository": "https://github.com/annrey/ai-plan-issue-spec-kit",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "issues",
+    "planning",
+    "collaboration"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "AI Plan Issue",
+    "shortDescription": "Plan and run development through realtime issue boards.",
+    "longDescription": "AI Plan Issue helps Codex turn large goals into parent and child issues, claim focused work, discuss decisions, and keep a local realtime collaboration board synchronized with Markdown and JSONL project records.",
+    "developerName": "AI Plan Issue",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write",
+      "Local"
+    ],
+    "defaultPrompt": [
+      "Turn this project goal into AI Plan Issues.",
+      "Open the AI Plan Issue realtime board.",
+      "Claim and run the next ready issue."
+    ],
+    "brandColor": "#16758A",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "screenshots": [
+      "./assets/screenshot-board.png"
+    ]
+  }
+}
