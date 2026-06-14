@@ -9,6 +9,7 @@ import pytest
 
 from ai_plan_issue import cli
 from ai_plan_issue import events
+from ai_plan_issue import exporter
 from ai_plan_issue import ledger
 from ai_plan_issue import store
 
@@ -247,6 +248,31 @@ def test_store_runtime_is_separate_from_ledger() -> None:
         assert f"def {name}" not in ledger_source
         assert f"def {name}" in store_source
         assert getattr(ledger, name) is getattr(store, name)
+
+
+def test_exporter_runtime_is_separate_from_ledger() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ledger_source = (root / "src" / "ai_plan_issue" / "ledger.py").read_text(encoding="utf-8")
+    exporter_source = (root / "src" / "ai_plan_issue" / "exporter.py").read_text(encoding="utf-8")
+
+    for name in (
+        "default_index",
+        "load_index",
+        "write_json",
+        "save_index",
+        "id_path_fragment",
+        "issue_dir",
+        "append_jsonl",
+        "append_activity",
+        "read_jsonl",
+        "make_issue_markdown",
+        "sync_issue_markdown_metadata",
+        "ensure_issue_files",
+        "refresh_board",
+    ):
+        assert f"def {name}" not in ledger_source
+        assert f"def {name}" in exporter_source
+        assert getattr(ledger, name) is getattr(exporter, name)
 
 
 def test_codex_plugin_runs_when_copied_without_repository_root(tmp_path: Path) -> None:
